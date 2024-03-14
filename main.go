@@ -9,7 +9,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"net/http"
@@ -70,26 +72,34 @@ func main() {
 	for update := range updates {
 		if update.Message != nil && (update.Message.Voice != nil || update.Message.Audio != nil) {
 			log.Info().Msg("Audio or voice message received")
-			_, span := otel.Tracer("sr-tg-bot").Start(context.Background(), "processMessage")
+			_, span := otel.Tracer("telegram-sr-bot").Start(context.Background(), "processMessage")
 			span.SetAttributes(attribute.String("type", "audioMessage"))
 
-			// Your logic to handle the audio message, e.g., download and send to an endpoint
 			handleAudio.AudioMessageHandle(bot, update.Message, endpoint)
-
+			span.SetStatus(codes.Ok, "Processing succeeded")
 			span.End()
 		}
 	}
 }
 
 func initTracing() *sdktrace.TracerProvider {
-	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize tracing exporter")
+	ctx := context.Background()
+	otelCollectorEndpoint := os.Getenv("TELEMETRY_GRPC_TARGET")
+	if otelCollectorEndpoint == "" {
+		log.Fatal().Msg("TELEMETRY_GRPC_TARGET environment variable is not set")
 	}
 
-	// Correctly create a new resource with the service.name attribute
+	// Initialize the OTLP exporter to send trace data to an OTel Collector over gRPC
+	exporter, err := otlptrace.New(ctx, otlptracegrpc.NewClient(
+		otlptracegrpc.WithEndpoint(otelCollectorEndpoint),
+		otlptracegrpc.WithInsecure(),
+	))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create OTLP trace exporter")
+	}
+
 	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
-		attribute.String("service.name", "sr-tg-bot"),
+		attribute.String("service.name", "telegram-sr-bot"),
 	))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create resource")
