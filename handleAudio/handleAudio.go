@@ -29,7 +29,7 @@ var AudioMessageCounter = prometheus.NewCounterVec(
 )
 
 func AudioMessageHandle(bot *tgbotapi.BotAPI, message *tgbotapi.Message, endpoint string) {
-	ctx, span := otel.Tracer("sr-tg-bot").Start(context.Background(), "handleAudioMessage")
+	ctx, span := otel.Tracer("telegram-sr-bot").Start(context.Background(), "handleAudioMessage")
 	defer span.End()
 
 	var fileID string
