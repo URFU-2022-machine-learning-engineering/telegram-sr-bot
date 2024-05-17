@@ -1,2 +1,2 @@
 # telegram-sr-bot
-Simple golang bot for sendint audio files
+Simple golang bot for sending audio files
